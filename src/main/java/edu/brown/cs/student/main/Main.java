@@ -18,7 +18,6 @@ import com.google.common.collect.ImmutableMap;
 import freemarker.template.Configuration;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
-import org.checkerframework.checker.units.qual.A;
 import spark.ExceptionHandler;
 import spark.ModelAndView;
 import spark.Request;
@@ -94,24 +93,12 @@ public final class Main {
                 Double.parseDouble(arguments[2])));
           } else if (arguments[0].equals("stars")) {
             methodName = "stars";
-            loadStars(arguments[1]));
+            loadStars(arguments[1]);
           } else if (arguments[0].equals("naive_neighbors")) {
             methodName = "naive_neighbors";
             if (name.length > 1) {
-              /*
-              for (String item: name) {
-                System.out.println(item);
-              }
-              System.out.println("Finding neighbors from " + name[1]);
-               */
               naiveNeighbors(Integer.parseInt(arguments[1]), name[1]);
             } else if (arguments.length == 5) {
-              /*
-              System.out.println("Finding neighbors from position "
-                  + Double.parseDouble(arguments[2]) + " "
-                  + Double.parseDouble(arguments[3]) + " "
-                  + Double.parseDouble(arguments[4]));
-               */
               naiveNeighbors(
                   Integer.parseInt(arguments[1]), Double.parseDouble(arguments[2]),
                   Double.parseDouble(arguments[3]), Double.parseDouble(arguments[4]));
@@ -125,7 +112,6 @@ public final class Main {
             throw new IllegalArgumentException();
           }
         } catch (NameNotFoundException e) {
-          // e.printStackTrace();
           System.out.println("ERROR: Invalid star name");
         } catch (IllegalArgumentException e) {
           System.out.println("ERROR: Invalid input for REPL");
@@ -136,8 +122,6 @@ public final class Main {
             System.out.println("ERROR: naive_neighbors is missing"
                 + "either full star position or name");
           }
-        } catch (Exception e) {
-          e.printStackTrace();
         }
       }
     } catch (Exception e) {
@@ -216,6 +200,11 @@ public final class Main {
     }
   }
 
+  /**
+   * Freshly loads in star position information
+   *
+   * @param file A CSV filename of star data
+   */
   private void loadStars(String fileName) {
     starIds.clear();
     starNames.clear();
@@ -252,8 +241,13 @@ public final class Main {
   }
 
 
+  /**
+   * Prints a given amount of nearest neighbors
+   *
+   * @param kValue nonnegative, integral number of nearest neighbors to find
+   * @param xValue, yvalue, zValue represents the position from which to find the nearest neighbors
+   */
   private void naiveNeighbors(int kValue, double xValue, double yValue, double zValue) {
-
     int realKValue = Math.min(kValue, starIds.size());
 
     List<Double> distances = calculateDistances(xValue, yValue, zValue);
@@ -261,6 +255,13 @@ public final class Main {
     sortDistances(distances, realKValue, true, "");
   }
 
+
+  /**
+   * Prints a given amount of nearest neighbors
+   *
+   * @param kValue nonnegative, integral number of nearest neighbors to find
+   * @param name the name of a star from which to find the nearest neighbors
+   */
   private void naiveNeighbors(int kValue, String name) throws Exception {
 
     int realKValue = Math.min(kValue, starIds.size() - 1);
@@ -288,6 +289,12 @@ public final class Main {
 
   }
 
+  /**
+   * Calculates all stars distances from a given position
+   *
+   * @param fromX, fromY, fromZ position to calculate distances from
+   * @return a list of distances from given position
+   */
   private List<Double> calculateDistances(double fromX, double fromY, double fromZ) {
     List<Double> distances = new ArrayList<>();
     for (int i = 0; i < starIds.size(); i++) {
@@ -300,22 +307,25 @@ public final class Main {
     return distances;
   }
 
+  /**
+   * Sorts all stars distances in ascending order
+   *
+   * @param distances - a list of distances from a given position
+   *        numNeighbors - the amount of neighbors to return
+   *        incudeName - whether to include the given star's id in list
+   *        name - name of star given
+   * @return a list of distances from given position
+   */
   private void sortDistances(List<Double> distances, int numNeighbors, boolean includeName,
-                               String name) {
+                             String name) {
 
     List<Integer> neighbors = new ArrayList<>();
     List<Double> smallestDistance = new ArrayList<>();
-    StringBuilder neighborList = new StringBuilder();
     for (int i = 0; i < numNeighbors; i++) {
       smallestDistance.add((double) Integer.MAX_VALUE);
     }
     for (int i = 0; i < starNames.size(); i++) {
       double distanceFrom = distances.get(i);
-      /*
-      System.out.println("Star Id: " + starIds.get(i));
-      System.out.println("Star Distance: " + distanceFrom);
-      System.out.println("Star Name: " + starNames.get(i));
-       */
       if (starNames.get(i).equals(name) && !includeName) {
         continue;
       } else {
@@ -338,80 +348,13 @@ public final class Main {
 
       }
     }
-    if (neighbors.isEmpty() || numNeighbors == 0) {
+    if (neighbors.isEmpty()) {
       System.out.print("");
     }
     for (int i = 0; i < numNeighbors; i++) {
-      System.out.println("k value: " + numNeighbors);
       System.out.println(neighbors.get(i));
     }
 
   }
-
-
-  /*for (int i = 0; i < realKValue; i++) {
-      smallestDistance.add((double) Integer.MAX_VALUE);
-    }
-
-    for (int i = 0; i < starLocations.size(); i++) {
-      double distanceFrom = distances.get(i);
-      System.out.println("Star Id: " + starIds.get(i));
-      System.out.println("Star Distance: " + distanceFrom);
-      System.out.println("Star Name: " + starNames.get(i));
-      if (!starNames.get(i).equals(name)) {
-        for (int j = 0; j < realKValue; j++) {
-
-          if (distanceFrom < smallestDistance.get(j)) {
-            smallestDistance.add(j, distanceFrom);
-            neighbors.add(j, starIds.get(i));
-            break;
-          } else if (distanceFrom == (smallestDistance.get(j)) && j == realKValue - 1) {
-            int random = (int) Math.floor(Math.random() * 2);
-            if (random == 1) {
-              smallestDistance.add(j, distanceFrom);
-              neighbors.add(j, starIds.get(i));
-              break;
-            }
-          }
-
-        }
-      }
-    }
-
-    //System.out.println("Size of neighbors list is " + neighbors.size() + " and realKValue is " + realKValue);
-    for (int i = 0; i < realKValue; i++) {
-      neighborList.append(neighbors.get(i)).append("\n");
-    }
-    */
-
-  /*for (int i = 0; i < realKValue; i++) {
-      smallestDistance.add((double) Integer.MAX_VALUE);
-    }
-
-    for (int i = 0; i < starLocations.size(); i++) {
-      double distanceFrom = distances.get(i);
-      for (int j = 0; j < realKValue; j++) {
-        if (distanceFrom < smallestDistance.get(j)) {
-          smallestDistance.add(j, distanceFrom);
-          neighbors.add(j, starIds.get(i));
-          break;
-        }
-        if (distanceFrom == (smallestDistance.get(i)) && j == kValue - 1) {
-          int random = (int) Math.floor(Math.random() * 2);
-          if (random == 1) {
-            smallestDistance.add(j, distanceFrom);
-            neighbors.add(j, starIds.get(i));
-            break;
-          }
-        }
-      }
-
-    }
-
-    for (int i = 0; i < realKValue; i++) {
-      neighborList.append(neighbors.get(i)).append("\n");
-    }
-    return neighborList.toString();
-   */
 
 }
