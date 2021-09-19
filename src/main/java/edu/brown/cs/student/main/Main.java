@@ -27,6 +27,8 @@ import spark.Spark;
 import spark.TemplateViewRoute;
 import spark.template.freemarker.FreeMarkerEngine;
 
+import javax.naming.NameNotFoundException;
+
 /**
  * The Main class of our project. This is where execution begins.
  */
@@ -35,9 +37,11 @@ public final class Main {
   // use port 4567 by default when running server
   private static final int DEFAULT_PORT = 4567;
 
-  private List<String> starIds = new ArrayList<String>();
+  private List<Integer> starIds = new ArrayList<Integer>();
   private List<String> starNames = new ArrayList<String>();
-  private List<String> starLocations = new ArrayList<String>();
+  private List<Double> starXValues = new ArrayList<Double>();
+  private List<Double> starYValues = new ArrayList<Double>();
+  private List<Double> starZValues = new ArrayList<Double>();
 
   /**
    * The initial method called when execution begins.
@@ -70,9 +74,8 @@ public final class Main {
       runSparkServer((int) options.valueOf("port"));
     }
 
-    //FIX WHEN NAME HAS 2 SPACES
-    //FIX FOR INPUT BY NAME AND BY POSITION IF THE INPUT IS PART OF THE STAR DATA IN ORDER TO FILTER ON FINAL RESULT
     // TODO: Add your REPL here!
+    String methodName = "";
     try (BufferedReader br = new BufferedReader(new InputStreamReader(System.in))) {
       String input;
       while ((input = br.readLine()) != null) {
@@ -90,36 +93,51 @@ public final class Main {
             System.out.println(new MathBot().subtract(Double.parseDouble(arguments[1]),
                 Double.parseDouble(arguments[2])));
           } else if (arguments[0].equals("stars")) {
-            System.out.println(loadStars(arguments[1]));
+            methodName = "stars";
+            loadStars(arguments[1]));
           } else if (arguments[0].equals("naive_neighbors")) {
+            methodName = "naive_neighbors";
             if (name.length > 1) {
+              /*
               for (String item: name) {
                 System.out.println(item);
               }
               System.out.println("Finding neighbors from " + name[1]);
-              System.out.println(naiveNeighbors(
-                  Integer.parseInt(arguments[1]), name[1]));
+               */
+              naiveNeighbors(Integer.parseInt(arguments[1]), name[1]);
             } else if (arguments.length == 5) {
-
+              /*
               System.out.println("Finding neighbors from position "
                   + Double.parseDouble(arguments[2]) + " "
                   + Double.parseDouble(arguments[3]) + " "
                   + Double.parseDouble(arguments[4]));
-              System.out.println(naiveNeighbors(
+               */
+              naiveNeighbors(
                   Integer.parseInt(arguments[1]), Double.parseDouble(arguments[2]),
-                  Double.parseDouble(arguments[3]), Double.parseDouble(arguments[4])));
+                  Double.parseDouble(arguments[3]), Double.parseDouble(arguments[4]));
             }
           } else if (arguments[0].equals("star_data")) {
-            for (int i = 0; i < starLocations.size(); i++) {
+            for (int i = 0; i < starIds.size(); i++) {
               System.out.println(starIds.get(i) + " " + starNames.get(i) + " "
-                  + starLocations.get(i));
+                  + starXValues.get(i) + " " + starYValues.get(i) + " " + starZValues.get(i));
             }
           } else {
-            throw new Exception();
+            throw new IllegalArgumentException();
+          }
+        } catch (NameNotFoundException e) {
+          // e.printStackTrace();
+          System.out.println("ERROR: Invalid star name");
+        } catch (IllegalArgumentException e) {
+          System.out.println("ERROR: Invalid input for REPL");
+        } catch (ArrayIndexOutOfBoundsException e) {
+          if (methodName.equals("stars")) {
+            System.out.println("ERROR: stars method is missing file name");
+          } else if (methodName.equals("naive_neighbors")) {
+            System.out.println("ERROR: naive_neighbors is missing"
+                + "either full star position or name");
           }
         } catch (Exception e) {
-          // e.printStackTrace();
-          System.out.println("ERROR: We couldn't process your input");
+          e.printStackTrace();
         }
       }
     } catch (Exception e) {
@@ -198,51 +216,178 @@ public final class Main {
     }
   }
 
-  private String loadStars(String fileName) {
+  private void loadStars(String fileName) {
     starIds.clear();
     starNames.clear();
-    starLocations.clear();
+    starXValues.clear();
+    starYValues.clear();
+    starZValues.clear();
     int count = 0;
     try (BufferedReader br = new BufferedReader(new FileReader(fileName))) {
       String line;
       while ((line = br.readLine()) != null) {
-        if (count != 0) {
-          String[] values = line.split(",");
-          starIds.add(values[0]);
+        String[] values = line.split(",");
+        if (count > 0) {
+          starIds.add(Integer.parseInt(values[0]));
           starNames.add(values[1]);
-          starLocations.add(values[2] + " " + values[3] + " " + values[4]);
+          starXValues.add(Double.parseDouble(values[2]));
+          starYValues.add(Double.parseDouble(values[3]));
+          starZValues.add(Double.parseDouble(values[4]));
+        } else if (count == 0) {
+          if (!(values[0].equals("StarID") && values[1].equals("ProperName")
+              && values[2].equals("X") && values[3].equals("Y") && values[4].equals("Z"))) {
+            throw new Exception();
+          }
         }
         count++;
       }
-    } catch (IOException e) {
-      e.printStackTrace();
+    } catch (ArrayIndexOutOfBoundsException e) {
+      System.out.println("ERROR: Empty CSV file");
+    } catch (NumberFormatException e) {
+      System.out.println("ERROR: At line " + count + " invalid field type");
+    } catch (Exception e) {
+      System.out.println("ERROR: Invalid CSV header");
     }
-    return "Read " + (count - 1) + " stars from " + fileName;
+    System.out.println("Read " + (count - 1) + " stars from " + fileName);
   }
 
 
-  private String naiveNeighbors(int kValue, double xValue, double yValue, double zValue) {
-    List<String> neighbors = new ArrayList<>();
-    List<Double> smallestDistance = new ArrayList<>();
-    List<Double> distances = new ArrayList<>();
-    StringBuilder neighborList = new StringBuilder();
+  private void naiveNeighbors(int kValue, double xValue, double yValue, double zValue) {
+
     int realKValue = Math.min(kValue, starIds.size());
-    int numStars = starIds.size();
 
+    List<Double> distances = calculateDistances(xValue, yValue, zValue);
 
-    for (String loc: starLocations) {
-      String[] values = loc.split(" ");
+    sortDistances(distances, realKValue, true, "");
+  }
 
+  private void naiveNeighbors(int kValue, String name) throws Exception {
+
+    int realKValue = Math.min(kValue, starIds.size() - 1);
+
+    double xValue = 0.0;
+    double yValue = 0.0;
+    double zValue = 0.0;
+    boolean foundStar = false;
+
+    for (int i = 0; i < starNames.size(); i++) {
+      if (starNames.get(i).equals(name)) {
+        xValue = starXValues.get(i);
+        yValue = starYValues.get(i);
+
+        zValue = starZValues.get(i);
+        foundStar = true;
+      }
+    }
+    if (!foundStar) {
+      throw new NameNotFoundException();
+    }
+
+    List<Double> distances = calculateDistances(xValue, yValue, zValue);
+    sortDistances(distances, realKValue, false, name);
+
+  }
+
+  private List<Double> calculateDistances(double fromX, double fromY, double fromZ) {
+    List<Double> distances = new ArrayList<>();
+    for (int i = 0; i < starIds.size(); i++) {
       distances.add(Math.sqrt(
-          Math.pow((Double.parseDouble(values[0]) - xValue), 2)
-              + Math.pow((Double.parseDouble(values[1]) - yValue), 2)
-              + Math.pow((Double.parseDouble(values[2]) - zValue), 2)
+          Math.pow(fromX - starXValues.get(i), 2)
+              + Math.pow(fromY - starYValues.get(i), 2)
+              + Math.pow(fromZ - starZValues.get(i), 2)
       ));
     }
+    return distances;
+  }
 
-    for (int i = 0; i < realKValue; i++) {
+  private void sortDistances(List<Double> distances, int numNeighbors, boolean includeName,
+                               String name) {
+
+    List<Integer> neighbors = new ArrayList<>();
+    List<Double> smallestDistance = new ArrayList<>();
+    StringBuilder neighborList = new StringBuilder();
+    for (int i = 0; i < numNeighbors; i++) {
       smallestDistance.add((double) Integer.MAX_VALUE);
     }
+    for (int i = 0; i < starNames.size(); i++) {
+      double distanceFrom = distances.get(i);
+      /*
+      System.out.println("Star Id: " + starIds.get(i));
+      System.out.println("Star Distance: " + distanceFrom);
+      System.out.println("Star Name: " + starNames.get(i));
+       */
+      if (starNames.get(i).equals(name) && !includeName) {
+        continue;
+      } else {
+        for (int j = 0; j < numNeighbors; j++) {
+          if (distanceFrom < smallestDistance.get(j)) {
+            smallestDistance.add(j, distanceFrom);
+            neighbors.add(j, starIds.get(i));
+            break;
+          } else if (distanceFrom == (smallestDistance.get(j)) && j == numNeighbors - 1) {
+            int random = (int) Math.floor(Math.random() * 2);
+            if (random == 1) {
+              smallestDistance.add(j, distanceFrom);
+              neighbors.add(j, starIds.get(i));
+              break;
+            }
+          }
+
+        }
+
+
+      }
+    }
+    if (neighbors.isEmpty() || numNeighbors == 0) {
+      System.out.print("");
+    }
+    for (int i = 0; i < numNeighbors; i++) {
+      System.out.println("k value: " + numNeighbors);
+      System.out.println(neighbors.get(i));
+    }
+
+  }
+
+
+  /*for (int i = 0; i < realKValue; i++) {
+      smallestDistance.add((double) Integer.MAX_VALUE);
+    }
+
+    for (int i = 0; i < starLocations.size(); i++) {
+      double distanceFrom = distances.get(i);
+      System.out.println("Star Id: " + starIds.get(i));
+      System.out.println("Star Distance: " + distanceFrom);
+      System.out.println("Star Name: " + starNames.get(i));
+      if (!starNames.get(i).equals(name)) {
+        for (int j = 0; j < realKValue; j++) {
+
+          if (distanceFrom < smallestDistance.get(j)) {
+            smallestDistance.add(j, distanceFrom);
+            neighbors.add(j, starIds.get(i));
+            break;
+          } else if (distanceFrom == (smallestDistance.get(j)) && j == realKValue - 1) {
+            int random = (int) Math.floor(Math.random() * 2);
+            if (random == 1) {
+              smallestDistance.add(j, distanceFrom);
+              neighbors.add(j, starIds.get(i));
+              break;
+            }
+          }
+
+        }
+      }
+    }
+
+    //System.out.println("Size of neighbors list is " + neighbors.size() + " and realKValue is " + realKValue);
+    for (int i = 0; i < realKValue; i++) {
+      neighborList.append(neighbors.get(i)).append("\n");
+    }
+    */
+
+  /*for (int i = 0; i < realKValue; i++) {
+      smallestDistance.add((double) Integer.MAX_VALUE);
+    }
+
     for (int i = 0; i < starLocations.size(); i++) {
       double distanceFrom = distances.get(i);
       for (int j = 0; j < realKValue; j++) {
@@ -267,92 +412,6 @@ public final class Main {
       neighborList.append(neighbors.get(i)).append("\n");
     }
     return neighborList.toString();
-  }
-
-  private String naiveNeighbors(int kValue, String name) throws Exception {
-
-    List<String> neighbors = new ArrayList<>();
-    List<Double> smallestDistance = new ArrayList<>();
-    List<Double> distances = new ArrayList<>();
-    StringBuilder neighborList = new StringBuilder();
-    int realKValue = Math.min(kValue, starIds.size());
-    int numStars = starIds.size();
-
-    double xValue = 0.0;
-    double yValue = 0.0;
-    double zValue = 0.0;
-    boolean foundStar = false;
-
-    for (int i = 0; i < starNames.size(); i++) {
-      if (starNames.get(i).equals(name)) {
-        String[] values = starLocations.get(i).split(" ");
-        xValue = Double.parseDouble(values[0]);
-        yValue = Double.parseDouble(values[1]);
-
-        zValue = Double.parseDouble(values[2]);
-        foundStar = true;
-      }
-    }
-
-    System.out.println(foundStar);
-    if (!foundStar) {
-      throw new Exception("Given Star Not Found");
-    }
-
-    for (String loc: starLocations) {
-      String[] values = loc.split(" ");
-
-      distances.add(Math.sqrt(
-          Math.pow((Double.parseDouble(values[0]) - xValue), 2)
-              + Math.pow((Double.parseDouble(values[1]) - yValue), 2)
-              + Math.pow((Double.parseDouble(values[2]) - zValue), 2)
-      ));
-    }
-    for (Double distance: distances) {
-      System.out.println(distance);
-    }
-
-    for (int i = 0; i < realKValue; i++) {
-      smallestDistance.add((double) Integer.MAX_VALUE);
-    }
-    for (int i = 0; i < starLocations.size(); i++) {
-      double distanceFrom = distances.get(i);
-      System.out.println("Star Id: " + starIds.get(i));
-
-      System.out.println("Star Distance: " + distanceFrom);
-
-      System.out.println("Star Name: " + starNames.get(i));
-      if (!starNames.get(i).equals(name)) {
-        for (int j = 0; j < realKValue; j++) {
-          if (distanceFrom < smallestDistance.get(j)) {
-            smallestDistance.add(j, distanceFrom);
-            neighbors.add(j, starIds.get(i));
-            break;
-          }
-
-          if (distanceFrom == (smallestDistance.get(i)) && j == kValue - 1) {
-            int random = (int) Math.floor(Math.random() * 2);
-            if (random == 1) {
-              smallestDistance.add(j, distanceFrom);
-              neighbors.add(j, starIds.get(i));
-              break;
-            }
-          }
-
-        }
-      }
-      for (int z = 0; z < smallestDistance.size(); z++) {
-        System.out.println("At position " + z + " " + smalls);
-      }
-    }
-
-    System.out.println("Size of neighbors list is " + neighbors.size()
-        + " and realKValue is " + realKValue);
-    for (int i = 0; i < realKValue; i++) {
-      neighborList.append(neighbors.get(i)).append("\n");
-    }
-    return neighborList.toString();
-
-  }
+   */
 
 }
